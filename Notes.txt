@@ -1,0 +1,23 @@
+ResultsExports: 
+
+ 
+
+SORTING:
+- Sort Experiments by Goal conversions that matter 
+
+SUMMARY TO ADD:
+- Status of Experiments by Project (Summary Page) 
+- Start and End Date
+
+EDGE CASES:
+- Archived Results
+- project_id and account_id they care about are different  
+
+Next Steps
+- Clean up code 
+- Segments
+- Start and End Date 
+
+
+
+- Results over time  
