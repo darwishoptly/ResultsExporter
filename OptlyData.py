@@ -285,9 +285,7 @@ class client:
 		# Create Goal - Goal Name 
 		# {exp_id: "goals" { goal_id : { "name" : goal_name, var_id : {"conversions" : X , "type" : X, "c-rate" : "X", "CTB": X, "improvement" : X } } } }
 		# self.goals = {}
-		self.makeExperimentsCall() ## sets variation names and original goals
-		print "Variation Names created"
-		
+		self.makeExperimentsCall() ## sets variation names and original goals		
 		## Finish building the hash 
 		# {exp_id: "goals" { goal_id :  { "name" : goal_name , variation_id: {"conversions": value, type: "type", "sum_of_squares" : SS_val_if_rev_goal, "conversion_rate" " X, "improvment" : X,  "CTB" : X }}}} 
 		self.makeResultsCall()	
