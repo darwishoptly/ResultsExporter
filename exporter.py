@@ -1,5 +1,3 @@
-#FINAL!!!! speed. 
-
 import xlsxwriter
 import requests
 from bs4 import BeautifulSoup
@@ -13,7 +11,7 @@ import operator
 from multiprocessing import Process, JoinableQueue
 from Queue import Empty
 
-GAE_Auth_Cookie = "AJKiYcG35Lq3IdenWyKLED8qGQ2MpSaQV1qpvHcjynFPtHuBWd5JHZcmTDnoQ6oYVbFHytBRY1PSYSoYMeGotgrKUkUuyxxJAXVr62vpvm6mjtgEgKIVRJFsEkrG8Ize35OOxD04G1A4JwcksKLtrTJknRR59CvyDZBlp4xeeIT9SYU-msHye-MJHK6RhgcZSXVC667uyWsSUgefbipSg5wzLHMPbMlMtekbVzgQh0tWiaQT3GJ49SV0uYCZLGXf1zmuawfojES9pZryFAT-0kxEAaiEsE2aSoiFxuu-Yhs5r4nLMcCaryaE-muyq4DPV-mZICngneLuRk6RhOoz8Ad4_25l-dhM2HR9fA0CcD9iCb4QrkQ7sXtYj7MGpAfJNkb6ENt4noqZ-pb2WKqRldUORiAPYtmOfhuZap9yTsWVbwCPTDAmhFcal2rdkORkYNyrqDILki7f9h3qxxprqoRy0k9a_09736b_lQK6bA4-XLLI8XmWdNl9i9dh3kGPTWj4GYSL6OFNC3jmEu_A8DyCxWYcQ_QXY5rB8tLGNdbx06d15eaD4F78eOYVEuD17owIfvVLdce39aIOkBw_qd5s9m17gUmwcdx4GhHMaN8ylxv0BMnhCe4y2pqYMtvIDxHdtor2t8cFU8t4LBX_i1WJnWowEIH-5Q"
+GAE_Auth_Cookie = "AJKiYcG8vDCiCWOtz2tq1Mx2J1PUFSeVZyJZa6PosmqQFIUcY4CiHgKwWRMyR20xH6FYWetFPRoE8GaxfPsV-EWXX-9Sc4F-TH1D6UV2vDoChgol2oaA9fjz6_owqhfe6dmLURJFvGc11JmLPTgfi3OleQcxJFF88aAPAx_XWF8a6n8eFL_WwBu8W77zK4Lg2Sa_mKyOUW3boFJLWqWdOMEw4YIex_rjEyjVCwotDzrWVyahC32rAj4tawoQPEl7Jw15VSRe9isGPHZuMfoRwHOBgt-PJvlVB-rG2qhBATck9U5MlwgONpH59KujvYR-Xb7AOsK1Zo3kLSHmQPk8UM8sDCrwE0D6sewlmnHjxK2FvyF0zzoFXnzuX1hwLVrGOVO-h67Om4DC5mXe9u7uPE07Rfm_bdgjfMAArM9SMf1baEwlskXBnaI0w9fdExfWHz6qStJODOx-fm34XI0D6QdUx90M9Su1i7V0WU1xI68rWvWOCw1sCgSg1CkcJRc3z1IIy1JWyvYDPOefWKeA7wel6qL9P49Roepz3_OcA7-ODVpbk6nBICOhrI4HF6TOVmz2KnIj5DT3KtqkgX6eyQjjbVYgR0fFnq8uL0cAQyDx8lcT3-YyV1LRd1oS3t0to7GI5RQJPJzsD6CIfA53b6vYlD3V-YeOCg"
 # optimizely_session = "fc7393a777c80660fb925303329039693509f167"
 email = "jlee@travelzoo.com"
 a_name = "Travel Zoo"
@@ -29,13 +27,13 @@ D.setGoalNames()
 num_experiments = len(D.exp_descriptions.keys())
 
 segment_names = {}
-for segment in requests.get("https://www.optimizely.com/api/projects/%s/segments.json?default_segments=true&token=%s" % (str(project_id), D.account_token), cookies={"optimizely_session": D.optimizely_session, "SACSID" : D.GAE_Auth_Cookie}).json()["segments"]:
+for segment in requests.get("https://www.optimizely.com/api/projects/%s/segments.json?default_segments=true&token=%s" % (str(project_id), D.account_token), cookies=D.cookies).json()["segments"]:
 	segment_names[str(segment['id'])] = segment["name"]
 
 segment_value_maps = {} # exp: seg value map
 for exp_id in D.exp_descriptions.keys():
 	print "....segment_value_maps.......", exp_id
-	segment_value_maps[exp_id] = requests.get("https://api.optimizely.com/v1/segment_values/%s?token=%s" % (str(exp_id), D.token_hash[exp_id]), cookies={"optimizely_session": D.optimizely_session, "SACSID" : D.GAE_Auth_Cookie}).json()["segment_value_map"]
+	segment_value_maps[exp_id] = requests.get("https://api.optimizely.com/v1/segment_values/%s?token=%s" % (str(exp_id), D.token_hash[exp_id]), cookies=D.cookies).json()["segment_value_map"]
 
 #SCHEMA ==> { s_id : {s_val : 0, count : 1 } }
 # Create Segment ID, Val Pairs with frequency
@@ -75,79 +73,13 @@ for pair in sorted_seg_pairs:
 	S.append(s)
 	i = i + 1
 
- 
-# summary_num = 15
-# num_important = 3
-# common_goals = D.createGoalCount()
-# 
-# num_high = 0
-# num_low = 0
-# imp_goals_positive = {}
-# imp_goals_negative = {}
-# for g in common_goals:
-# 	imp_goals_positive[g[0]] = []
-# 	imp_goals_negative[g[0]] = []
-# 
-# def insertIfImportant(goal_id, exp_id, var_id, improvement):
-# 	# Assumes largest first, smallest lastom
-# 	if improvement > 0 and sum([len(imp_goals_positive[x]) for x in imp_goals_positive]) < summary_num:
-# 		if exp_id == "381700640" and goal_id == "231307144":
-# 			print goal_id, exp_id, var_id, improvement		
-# 		imp_goals_positive[goal_id].append({ "exp_id" : exp_id, "var_id": var_id, "improvement" : improvement })
-# 		imp_goals_positive[goal_id] = sorted(imp_goals_positive[goal_id], key= lambda k: k['improvement'] , reverse=True)
-# 		if(len(imp_goals_positive[goal_id]) > num_important):
-# 			imp_goals_positive[goal_id].pop()
-# 	elif sum([len(imp_goals_negative[x]) for x in imp_goals_negative]) < summary_num:
-# 		# Assumes smallest first, largest last	
-# 		imp_goals_negative[goal_id].append({ "exp_id" : exp_id, "var_id": var_id, "improvement" : improvement })
-# 		imp_goals_negative[goal_id] = sorted(imp_goals_negative[goal_id], key= lambda k: k['improvement'])
-# 		if(len(imp_goals_negative[goal_id]) > num_important):
-# 			imp_goals_negative[goal_id].pop()
-# 
-# exp_ids = D.exp_descriptions.keys()
-# for g in common_goals:
-# 	goal_id = g[0]
-# 	for exp_id in exp_ids:
-# 		if goal_id in D.goals[exp_id]['goals']:
-# 			for var_id in D.visitor_count[exp_id]['variation'].keys():
-# 				if exp_id not in D.goals or var_id not in D.variation_names:
-# 					print "skipping for most imp: ", exp_id, goal_id, var_id 
-# 					continue
-# 				imp = D.goals[exp_id]['goals'][goal_id][var_id]['improvement']				
-# 				if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 100:
-# 					continue
-# 				else:
-# 					# print ".... inserting goal .....", goal_id, exp_id, var_id
-# 					insertIfImportant(goal_id, exp_id, var_id, float(imp))
-# 					if imp > .05:
-# 						num_high +=1 
-# 					if imp < -.05: 
-# 						num_low += 1 
-# 
-# #  remove duplicates 
-# for g_id in imp_goals_positive.keys(): 
-# 	for exp in imp_goals_positive[g_id]:
-# 		if exp in imp_goals_negative[g_id]: 
-# 			if exp['improvement'] > 0:
-# 				imp_goals_negative[g_id].remove(exp)
-# 			else:
-# 				imp_goals_positive[g_id].remove(exp)
-# 
-# for goal_id in imp_goals_positive.keys():
-# 	if imp_goals_positive[goal_id] == []:
-# 		del imp_goals_positive[goal_id]
-# 	elif imp_goals_negative[goal_id] == []:
-# 		del imp_goals_negative[goal_id]
-
-
-
 i = 0
 imp_goals_positive = []
 imp_goals_negative = []
 summary_num = 15
 num_important = 3
 common_goals = D.createGoalCount()
-
+exp_ids = D.exp_descriptions.keys()
 while i < len(common_goals):
 	goal_id, goal_count = common_goals[i][0], common_goals[i][1]
 	goal_ids = [goal_id]
@@ -200,10 +132,10 @@ for exp_id in D.goals:
 			# print imp, D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 50, b_conversions < 50
 			if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 50 or b_conversions < 50:
 				continue
-			elif imp > .05 and plus:
+			elif imp > .05 and plus_high:
 				num_high += 1
 				plus_high = False
-			elif imp < -.05 and plus:
+			elif imp < -.05 and plus_low:
 				num_low += 1
 				print exp_id, goal_id, var_id, D.goals[exp_id]['goals'][goal_id][var_id]['conversions'], b_conversions, imp
 				plus_low = False	
@@ -454,20 +386,6 @@ for i in range(2):
 
 writeRange(summary_sheet, row, col, ["Segment Name", "Segment Value", "# Expmts with deviation", "Avg % Total Visitors" , "Score"], False, [f,f,f,f,f])
 
-
-# Top 5 Imp Goals 
-# row, col= row + 1, 1 
-# data_start_row = row 
-# for important_set in [imp_goals_positive, imp_goals_negative]:
-# 	for goal_id in important_set:
-# 		for v in  important_set[goal_id]:
-# 			f = workbook.add_format(combinedFormat(["font", "wrap", "v_middle"]))
-# 			p = workbook.add_format(combinedFormat(["percent", "font", "center", "v_middle"]))
-# 			values = [D.exp_descriptions[v["exp_id"]]["description"], D.variation_names[v["var_id"]], v["improvement"], D.goal_names[goal_id]]
-# 			writeRange(summary_sheet, row, col, values, False, [f, f, p, f])
-# 			row += 1
-# 	row, col = data_start_row, col + 5
-
 row, col= row + 1, 1 
 data_start_row = row 
 for important_set in [imp_goals_positive, imp_goals_negative]:
@@ -571,39 +489,38 @@ headers = ["Experiment ID",
 		   "Segment Value"]
 f_mats = [f for h in headers]
 writeRange(worksheet, row, col, headers, True, f_mats) 
-for exp_id in D.goals:
-	plus_low, plus_high = True, True
-	for goal_id in D.goals[exp_id]['goals']:
-		for var_id in D.visitor_count[exp_id]['variation'].keys():
-			if exp_id not in D.goals or var_id not in D.variation_names:
-				print "skipping for most imp: ", exp_id, g_id, var_id 
-				continue
-			seg_name = "Original" if D.segment_id == "" else ""
-			r = [exp_id,
-				var_id,
-				D.exp_descriptions[exp_id]["description"],
-				D.variation_names[var_id],
-				D.goals[exp_id]['goals'][goal_id][var_id]["conversions"],
-				D.goals[exp_id]['goals'][goal_id][var_id]["conversion_rate"],
-				D.goals[exp_id]['goals'][goal_id][var_id]["Improvement"],
-				D.goals[exp_id]['goals'][goal_id][var_id]["CTB"],
-				seg_name,
-				D.segment_value]
-			text = workbook.add_format(combinedFormat(["font"]))
-			num = workbook.add_format(combinedFormat(["decimal", "font"]))
-			percent = workbook.add_format(combinedFormat(["format", "font"]))
-			f_mats = [num,
-					num,
-					text,
-					text, 
-					num,
-					percent,
-					percent,
-					percent,
-					percent]
-			writeRange()
-
-
+# for exp_id in D.goals:
+# 	plus_low, plus_high = True, True
+# 	for goal_id in D.goals[exp_id]['goals']:
+# 		for var_id in D.visitor_count[exp_id]['variation'].keys():
+# 			if exp_id not in D.goals or var_id not in D.variation_names:
+# 				print "skipping for most imp: ", exp_id, g_id, var_id 
+# 				continue
+# 			seg_name = "Original" if D.segment_id == "" else ""
+# 			print exp_id, goal_id, var_id
+# 			r = [exp_id,
+# 				var_id,
+# 				D.exp_descriptions[exp_id]["description"],
+# 				D.variation_names[var_id],
+# 				D.goals[exp_id]['goals'][goal_id][var_id]["conversions"],
+# 				D.goals[exp_id]['goals'][goal_id][var_id]["conversion_rate"],
+# 				D.goals[exp_id]['goals'][goal_id][var_id]["improvement"],
+# 				D.goals[exp_id]['goals'][goal_id][var_id]["CTB"],
+# 				seg_name,
+# 				D.segment_value]
+# 			text = workbook.add_format(combinedFormat(["font"]))
+# 			num = workbook.add_format(combinedFormat(["decimal", "font"]))
+# 			percent = workbook.add_format(combinedFormat(["format", "font"]))
+# 			f_mats = [num,
+# 					num,
+# 					text,
+# 					text, 
+# 					num,
+# 					percent,
+# 					percent,
+# 					percent,
+# 					percent]
+# 			writeRange()
 
 top_row = workbook.add_format(combinedFormat(["font_bold", "fill_grey"]))
 worksheet.set_row(0, None, top_row)
