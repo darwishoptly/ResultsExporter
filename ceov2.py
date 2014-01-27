@@ -2,20 +2,19 @@ import xlsxwriter
 import requests
 from bs4 import BeautifulSoup
 from pprint import pprint 
-import VariationNames
 import NormDist
 import ExpDist
 # r = requests.get("https://www.optimizely.com/edit?experiment_id=401420652", cookies={"optimizely_session": optimizely_session, "SACSID" : GAE_Auth_Cookie})
-GAE_Auth_Cookie = "AJKiYcEbAXewrRJPr1XO0aFPiN7A_em-IhmImV8AXe6iSRtuXGgBf1t7pUrFPC1semcfMpGd3bk4DtvAI6sPZBTYZkdIP8wOZ5b3epIoNfz3QvlHtgNn9Bz3SwjaFyrXmmzmksswlcipqNka-Q0f2AonVxV4L4Co2qbv7APe2r4QgYlwkTGBEtoeTao2829NJhTvkreMevEJD2meOt0lQXCtlOnaPppKCEhoNTVbRzXShVnu1S940Qa_lG4afd4m4Z1N0xZWxtIEQQ0FJSemb_FYTw8y1GXyQNvj6fE2HlFp9gfa53NG9AJtQFUUOAeX2LlsP9JZwX-V47nxaOPdHVIqU8iFin5js2ouFnOd66Z9V14D6WScLgSx8zrtbAXjNuoshuotFPDYn0Rp-UT9et3xc2D8LVwmHQdqEDyYF7JpnJOnDMAEWIONqSEBVvAagNH3pxlHW4iY-OxB4dtNY4Fukgp3IzuK5Urlne4UJ_8jIc3xIr4wg2UZkoH2oF_VxdLFs7UJPZLvDZhfKcldkTDsJ4Ma9vaLah99uSE0mclDZghjVoXgX5Gnc19sNrwYaf8TwE2Da8YTqlXNuqgzmp8cAl9qLopd9VlznHxnLusewdib8M2FnS9FQKEDv2g1uShp0Xg_Uhp9nEJFrqh4SS7vKcGJKfLE8Q"
-# optimizely_session = "7881e8caae1cbe601013a2b928f28a18ca61a7ec"
-email = "optimizely@healthydirections.com"
-project_id = 69686747
-account_id = 69686747
-name = "HealthyDirections.xlsx"
 
+GAE_Auth_Cookie = "AJKiYcGlT-a7VKyCc_ENLr2YY6uAhHscwTVHYPrP4Q53bsBb5XtJ0kqLiIihdQassrfOFl_tvXq_M-o49NpeT0msCRcsdvUuvghoqkStjrpczX52LGGM8d9_LweX9VEk5A8ZlDhNU1ydZIfWmWlvV1F8K-0ejDv_eUGMqiOijn-oTOG4XGPW-wqcEUnssjrkbpK5lIi5Hc7DxED46j6L3j3gIjRoV3Vg_GEtYkYeAxL3HpxyEe38lSu27zoRBA46WGxUoyPUsCn3oVTqVRGCPSfBKoVXfmyJ87qT2DYfoLWFEBXOgK8MQarQExF5Eu4fe_vpT5zDg4uoeKfbr9WTBqJhKD-3ty8Ry81mVCIpzltA4RGebDaIqwhoaXqCofHTcob7t36rE0_0h6hy93bAnOtB-6iXCnvnx6FSiFqC5uTPe0ZPiLKt4o3i_TKLyglPaKTvAk4CauppUvXbewqQn3w5Ci4Mz-cuPnNqWk8tBjxRciEnQsNu5nyFSeTqTqGcfsRFV4KqauaQKlHRb7UsE22RuM2SL5wzN81wJmHsoEXmsCDjgLWa1gJL8G9eIfcwAqM-duK6jn2m2zQSyuWny31x3oVxsQrzv0FuSevqsH5orfEZBlxs4TzR3GsteF8fK465WBm_95RY1YCfacQKOKFX-S3ohLgf8A"
+optimizely_session = "ffd31f6a89777361d5cef194e9f7453f9e75efc4"
+# email = "optimizely@healthydirections.com"
+project_id = 119665466
+account_id = 119665466
+name = "ResultsExport.xlsx"
 
-r = requests.get("https://www.optimizely.com/admin/impersonate?email=%s" % email, cookies={"SACSID" : GAE_Auth_Cookie}) 
-optimizely_session = r.cookies['optimizely_session']
+# r = requests.get("https://www.optimizely.com/admin/impersonate?email=%s" % email, cookies={"SACSID" : GAE_Auth_Cookie}) 
+# optimizely_session = optimizely_session or r.cookies['optimizely_session']
 
 
 ## SACSID Cookie after impersonation
@@ -23,7 +22,7 @@ optimizely_session = r.cookies['optimizely_session']
 account_token_request = requests.get("https://www.optimizely.com/admin/account_token?account_id=%s" % str(project_id), cookies={"optimizely_session": optimizely_session, "SACSID" : GAE_Auth_Cookie}) 
 account_token = account_token_request.json()["token"]
 
-if account_token == None:
+if account_token == None or "Forbidden" in account_token.text:
 	print "ACCOUNT TOKEN ERROR"
 
 # Get Experiment ID's and Descriptions: https://www.optimizely.com/api/experiments.json?project_ids=82719230&status=Archived
@@ -81,6 +80,8 @@ for exp_id in exp_descriptions.keys():
 	goals[exp_id] = {"goals": {}}
 	## should rename to experiments request
 	req_goals = requests.get("https://www.optimizely.com/api/experiments/%s.json" % (exp_id), params={"include_results":"false", "token":token_hash[exp_id]}, cookies={"optimizely_session": optimizely_session, "SACSID" : GAE_Auth_Cookie})
+	exp_descriptions[exp_id]["start"] = req_goals.json()["earliest"]
+	exp_descriptions[exp_id]["end"] = req_goals.json()["latest"]	
 	goals[exp_id]["goals"] = dict( goals[exp_id]["goals"].items() + { str(goal["id"]) : { "name" : goal["name"] } for goal in req_goals.json()["goals"] }.items())
 	baseline_index = req_goals.json()["display_baseline_index"]
 	exp_descriptions[exp_id]["baseline_id"] = str(req_goals.json()["variations"][baseline_index]["id"])
@@ -138,7 +139,7 @@ def createGoalCount():
 def getGoalNames():
     goal_names = {}
     for exp_id in goals:
-        goal_ids = goals[exp_id]['goals'].keys()
+        goal_ids = goals[exp_id]['goals'].keys()	
         for goal_id in goal_ids:
             if goal_id not in goal_names:
                 goal_names[goal_id] = goals[exp_id]['goals'][goal_id]["name"]
