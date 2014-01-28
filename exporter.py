@@ -151,6 +151,7 @@ def removeLowExpVisitors(s, percent):
 		if s.visitor_count[exp_id]["total_visitors"] < percent * total_visitors: 
 			del s.exp_descriptions[exp_id]
 			del s.visitor_count[exp_id]
+			del s.goals[exp_id]
 
 [removeLowExpVisitors(s, .05) for s in S]
 S = ([t for t in S if len(t.visitor_count) > 1])
@@ -315,28 +316,31 @@ row += 2
 writeRange(segment_sheet, row, col, headers, False, f_mats)
 row+=1
 for d in deviant_segments:
-	exp_id, var_id, goal_id = d[3], d[4], d[2]  
+	exp_id, var_id, goal_id = d[3], d[4], d[2]
+	segment = [s for s in S if s.segment_id == d[0] and s.segment_value == d[1]][0]  
 	values = [
-		d[3],
+		exp_id,
 		segment_names[d[0]],
 		d[1],
 		D.exp_descriptions[d[3]]['description'],
-		D.variation_names[d[4]],
-		D.goal_names[d[2]],
+		D.variation_names[var_id],
+		D.goal_names[goal_id],
 		D.visitor_count[exp_id]["variation"][var_id],
-		"TBD",
+		segment.visitor_count[exp_id]["variation"][var_id],
 		D.goals[exp_id]["goals"][goal_id][var_id]["improvement"],
 		d[5],
-		"TBD" 
+		count_deviant_segments[(segment.segment_id, segment.segment_value)]["weighted_count"] 
 	]
 	imp = "fill_green" if goal_id in imp_goals_positive else "" # short for importance
 	tex = workbook.add_format(combinedFormat(["font", "v_middle", imp]))
 	tex_c = workbook.add_format(combinedFormat(["font", "v_middle", "center", imp]))
 	per = workbook.add_format(combinedFormat(["font", "v_middle", "percent", "center", imp]))
 	dec = workbook.add_format(combinedFormat(["font", "v_middle", "decimal", "center", imp]))
-	f_mats = [tex,tex, tex, tex, tex, tex, tex_c, tex_c, per, dec, tex_c ]
+	f_mats = [tex,tex, tex, tex, tex, tex, tex_c, dec, per, dec, dec ]
 	writeRange(segment_sheet, row, col, values, False, f_mats)
 	row += 1
+
+segment_sheet.autofilter( 3, 1 , len(deviant_segments) + 3, 11)
 
 row, col = 1, 1  
 summary_sheet.set_column(0, 0, 1)
@@ -476,11 +480,19 @@ for exp_id in expIDSortedbyVisitorCount:
 	row += 1
 	col = 0
 
+top_row = workbook.add_format(combinedFormat(["font_bold", "fill_grey"]))
+worksheet.set_row(0, None, top_row)
+worksheet.set_zoom(75)
+worksheet.freeze_panes(1,2)
+worksheet.hide_gridlines(2)
+
+row, col = 0, 0 
 f = workbook.add_format(combinedFormat(["font_bold", "fill_grey", "center"]))
 headers = ["Experiment ID", 
 		   "Variation ID", 
 		   "Experiment Name", 
-		   "Variation Name", 
+		   "Variation Name",
+		   "Visitors", 
 		   "Conversions", 
 		   "Conversion Rate", 
 		   "Improvement", 
@@ -488,45 +500,50 @@ headers = ["Experiment ID",
 		   "Segment Name",
 		   "Segment Value"]
 f_mats = [f for h in headers]
-writeRange(worksheet, row, col, headers, True, f_mats) 
-# for exp_id in D.goals:
-# 	plus_low, plus_high = True, True
-# 	for goal_id in D.goals[exp_id]['goals']:
-# 		for var_id in D.visitor_count[exp_id]['variation'].keys():
-# 			if exp_id not in D.goals or var_id not in D.variation_names:
-# 				print "skipping for most imp: ", exp_id, g_id, var_id 
-# 				continue
-# 			seg_name = "Original" if D.segment_id == "" else ""
-# 			print exp_id, goal_id, var_id
-# 			r = [exp_id,
-# 				var_id,
-# 				D.exp_descriptions[exp_id]["description"],
-# 				D.variation_names[var_id],
-# 				D.goals[exp_id]['goals'][goal_id][var_id]["conversions"],
-# 				D.goals[exp_id]['goals'][goal_id][var_id]["conversion_rate"],
-# 				D.goals[exp_id]['goals'][goal_id][var_id]["improvement"],
-# 				D.goals[exp_id]['goals'][goal_id][var_id]["CTB"],
-# 				seg_name,
-# 				D.segment_value]
-# 			text = workbook.add_format(combinedFormat(["font"]))
-# 			num = workbook.add_format(combinedFormat(["decimal", "font"]))
-# 			percent = workbook.add_format(combinedFormat(["format", "font"]))
-# 			f_mats = [num,
-# 					num,
-# 					text,
-# 					text, 
-# 					num,
-# 					percent,
-# 					percent,
-# 					percent,
-# 					percent]
-# 			writeRange()
+writeRange(dump, row, col, headers, False, f_mats) 
+row += 1
 
-top_row = workbook.add_format(combinedFormat(["font_bold", "fill_grey"]))
-worksheet.set_row(0, None, top_row)
-worksheet.set_zoom(75)
-worksheet.freeze_panes(1,2)
-worksheet.hide_gridlines(2)
+arr = [D] + S
+for results_object in arr:
+	print results_object.segment_id, results_object.segment_value
+	for exp_id in results_object.exp_descriptions.keys():
+		for goal_id in results_object.goals[exp_id]['goals']:
+			for var_id in results_object.visitor_count[exp_id]['variation'].keys():
+				if exp_id not in results_object.goals or var_id not in results_object.variation_names:
+					print "skipping for dump: ", exp_id, g_id, var_id 
+					continue
+				seg_name = "Original" if results_object.segment_id == "" else segment_names[results_object.segment_id]
+				r = [exp_id,
+					var_id,
+					results_object.exp_descriptions[exp_id]["description"],
+					results_object.variation_names[var_id],
+					results_object.visitor_count[exp_id]['variation'][var_id],
+					results_object.goals[exp_id]['goals'][goal_id][var_id]["conversions"],
+					results_object.goals[exp_id]['goals'][goal_id][var_id]["conversion_rate"],
+					results_object.goals[exp_id]['goals'][goal_id][var_id]["improvement"],
+					results_object.goals[exp_id]['goals'][goal_id][var_id]["CTB"],
+					seg_name,
+					results_object.segment_value]
+				text = workbook.add_format(combinedFormat(["font"]))
+				num = workbook.add_format(combinedFormat(["decimal", "font"]))
+				percent = workbook.add_format(combinedFormat(["percent", "font"]))
+				f_mats = [num,
+						num,
+						text,
+						text,
+						num,
+						num,
+						percent,
+						percent,
+						percent,
+						text,
+						text]
+				writeRange(dump, row, col, r, False, f_mats)
+				row+=1
+
+dump.hide_gridlines(2)
+dump.set_column(0, len(f_mats)-1, 14)
+dump.autofilter(0, 1 , row, len(f_mats)-1)
 workbook.close()
 
 
