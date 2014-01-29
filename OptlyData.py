@@ -58,10 +58,10 @@ class client:
 		if self.account_token == None:
 			raise "ACCOUNT TOKEN ERROR"
 	
-	def setExperimentDescriptions(self, months_ago=3):
+	def setExperimentDescriptions(self, months_ago=2):
 		# Get Experiment ID's and Descriptions: https://www.optimizely.com/api/experiments.json?project_ids=82719230&status=Archived
 		# self.exp_descriptions = {} ## {experiment_id: description, ...}
-		if self.exp_descriptions == {} or months_ago != 3:
+		if self.exp_descriptions == {} or months_ago != 2:
 			for status in ["Paused%2CRunning", "Archived"]:
 			# for status in ["Archived"]:				
 				experiment_ids_request = requests.get("https://www.optimizely.com/api/experiments.json?project_ids=%s&status=%s" % (str(self.project_id), status), cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie } ) 
@@ -71,7 +71,7 @@ class client:
 				print "deleting", exp_id
 				del self.exp_descriptions[exp_id]
 			else:
-			## remove experiments > 4 months old. 
+			## remove experiments > x months old. 
 				t = self.exp_descriptions[exp_id]['last_modified']
 				exp_date = datetime.datetime.strptime(t[0:-1], "%Y-%m-%dT%H:%M:%S")
 				ago = datetime.datetime.today() - datetime.timedelta(months_ago*365/12)	
@@ -183,6 +183,7 @@ class client:
 		q.task_done()
 
 	def processVisitors(self, output, extra):
+		print "processing visitors"
 		while True:
 			try:
 				(exp_id, goal_id, var_id, conversions, goal_type) = output.get(block=False)	
@@ -269,7 +270,7 @@ class client:
 		for data in data_arr:
 			if data["type"] == "revenue_goal":
 				print "..revenue..", exp_id, data["goal_ids"][0], data["variation_id"], int(data["sum_of_squares"])
-				output.put( (exp_id, data["goal_ids"][0], data["variation_id"], int(data["sum_of_squares"])) )
+				output.put( (exp_id, str(data["goal_ids"][0]), data["variation_id"], int(data["sum_of_squares"])) )
 		q.task_done()
 		
 	def makeRevenueCall(self):	

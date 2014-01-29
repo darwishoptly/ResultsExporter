@@ -13,12 +13,12 @@ from Queue import Empty
 
 GAE_Auth_Cookie = "AJKiYcG8vDCiCWOtz2tq1Mx2J1PUFSeVZyJZa6PosmqQFIUcY4CiHgKwWRMyR20xH6FYWetFPRoE8GaxfPsV-EWXX-9Sc4F-TH1D6UV2vDoChgol2oaA9fjz6_owqhfe6dmLURJFvGc11JmLPTgfi3OleQcxJFF88aAPAx_XWF8a6n8eFL_WwBu8W77zK4Lg2Sa_mKyOUW3boFJLWqWdOMEw4YIex_rjEyjVCwotDzrWVyahC32rAj4tawoQPEl7Jw15VSRe9isGPHZuMfoRwHOBgt-PJvlVB-rG2qhBATck9U5MlwgONpH59KujvYR-Xb7AOsK1Zo3kLSHmQPk8UM8sDCrwE0D6sewlmnHjxK2FvyF0zzoFXnzuX1hwLVrGOVO-h67Om4DC5mXe9u7uPE07Rfm_bdgjfMAArM9SMf1baEwlskXBnaI0w9fdExfWHz6qStJODOx-fm34XI0D6QdUx90M9Su1i7V0WU1xI68rWvWOCw1sCgSg1CkcJRc3z1IIy1JWyvYDPOefWKeA7wel6qL9P49Roepz3_OcA7-ODVpbk6nBICOhrI4HF6TOVmz2KnIj5DT3KtqkgX6eyQjjbVYgR0fFnq8uL0cAQyDx8lcT3-YyV1LRd1oS3t0to7GI5RQJPJzsD6CIfA53b6vYlD3V-YeOCg"
 # optimizely_session = "fc7393a777c80660fb925303329039693509f167"
-email = "jlee@travelzoo.com"
-a_name = "Travel Zoo"
+email = "cdavin@atgstores.com"
+a_name = "ATG Stores"
 
 # email = "mjolley@fareportal.com"
-project_id = 93281222
-account_id = 93281222
+project_id = 285656357
+account_id = 285656357
 name = a_name+"_%s.xlsx" % str(datetime.date.today())
 
 D = OptlyData.client(GAE_Auth_Cookie, project_id, account_id, {"start": True, "email": email})
@@ -100,7 +100,7 @@ while i < len(common_goals):
 					imp = D.goals[exp_id]['goals'][g_id][var_id]['improvement']	
 					baseline_id = D.exp_descriptions[exp_id]['baseline_id']
 					b_conversions = D.goals[exp_id]['goals'][g_id][baseline_id]['conversions']			
-					if imp == "-" or D.goals[exp_id]['goals'][g_id][var_id]['conversions'] < 100 or b_conversions < 100:
+					if imp == "-" or D.goals[exp_id]['goals'][g_id][var_id]['conversions'] < 250 or b_conversions < 250:
 						continue
 					elif imp > 0:
 						# print {"goal_id" : g_id,  "exp_id" : exp_id, "var_id": var_id, "improvement" : imp }
@@ -119,7 +119,7 @@ while len(imp_goals_negative) > summary_num:
 
 num_high = 0
 num_low = 0		
-for exp_id in D.goals:
+for exp_id in D.exp_descriptions:
 	plus_low, plus_high = True, True
 	for goal_id in D.goals[exp_id]['goals']:
 		for var_id in D.visitor_count[exp_id]['variation'].keys():
@@ -130,7 +130,7 @@ for exp_id in D.goals:
 			baseline_id = D.exp_descriptions[exp_id]['baseline_id']
 			b_conversions = D.goals[exp_id]['goals'][goal_id][baseline_id]['conversions']	 
 			# print imp, D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 50, b_conversions < 50
-			if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 50 or b_conversions < 50:
+			if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 250 or b_conversions < 250:
 				continue
 			elif imp > .05 and plus_high:
 				num_high += 1
@@ -162,8 +162,11 @@ def segmentWeight(s):
 	for exp_id in s.exp_descriptions.keys():
 		seg_visits += s.visitor_count[exp_id]["total_visitors"]  
 		total_visits += D.visitor_count[exp_id]["total_visitors"]
-	print s.segment_id, s.segment_value, seg_visits, total_visits
 	return float(seg_visits) / total_visits
+
+
+
+# [s for s in S if s.segment_id == '285473938' and s.segment_value == 'true'][0].goals['383680670']['goals']['330456990']
 
 deviant_segments = []
 for s in S: 
@@ -177,9 +180,10 @@ for s in S:
 					original = D.goals[exp_id]["goals"][goal_id][var_id]["improvement"]
 					difference = seg - original 
 					conversions = s.goals[exp_id]["goals"][goal_id][var_id]["conversions"]
-					if abs(difference) > .1 and conversions > 250: 
+					baseline_conversions = s.goals[exp_id]["goals"][goal_id][s.exp_descriptions[exp_id]['baseline_id']]["conversions"]
+					if abs(difference) > .1 and conversions > 250 and baseline_conversions > 250: 
 						deviant_segments.append((s.segment_id, s.segment_value, goal_id, exp_id, var_id, float("{0:.2f}".format(difference)), segmentWeight(s) ))
-
+						print(exp_id, conversions, baseline_conversions)
 
 deviant_segments = sorted(deviant_segments, key= lambda k: k[5], reverse=True)
 
@@ -241,7 +245,7 @@ def setGoalHeaders(worksheet, row, column, goals):
 
 min_visits = 1000
 goals_with_min_visits = sum([1 for exp in D.visitor_count if D.visitor_count[exp]['total_visitors'] > 1000])
-avg_goals_exp = float(sum([len(D.goals[exp_id]['goals']) for exp_id in D.goals if D.visitor_count[exp_id]['total_visitors'] > 1000])) / goals_with_min_visits
+avg_goals_exp = float(sum([len(D.goals[exp_id]['goals']) for exp_id in D.exp_descriptions if D.visitor_count[exp_id]['total_visitors'] > 1000])) / goals_with_min_visits
 
 workbook = xlsxwriter.Workbook(name);
 summary_sheet = workbook.add_worksheet("Summary")
