@@ -247,7 +247,7 @@ min_visits = 1000
 goals_with_min_visits = sum([1 for exp in D.visitor_count if D.visitor_count[exp]['total_visitors'] > 1000])
 avg_goals_exp = float(sum([len(D.goals[exp_id]['goals']) for exp_id in D.exp_descriptions if D.visitor_count[exp_id]['total_visitors'] > 1000])) / goals_with_min_visits
 
-workbook = xlsxwriter.Workbook(name);
+workbook = xlsxwriter.Workbook("/Output/" + name);
 summary_sheet = workbook.add_worksheet("Summary")
 segment_sheet = workbook.add_worksheet("Segments")
 worksheet = workbook.add_worksheet("Experiments Report - Detailed")
@@ -550,5 +550,6 @@ dump.set_column(0, len(f_mats)-1, 14)
 dump.autofilter(0, 1 , row, len(f_mats)-1)
 workbook.close()
 
-
+workbook = xlsxwriter.Workbook("/Output/test")
+workbook.close()
 
