@@ -1,3 +1,4 @@
+import time		
 import xlsxwriter
 import requests
 from bs4 import BeautifulSoup
@@ -9,7 +10,7 @@ from multiprocessing import Process, JoinableQueue
 from Queue import Empty
 
 
-## Currenlt Experiments Call must be made before processing v1 results call. this can be factored out. 
+# One instance of the OptlyData class holds all experiment information for a single segment id, value pair, for a given project. If no segment ID,Value pair is defined, then its just for the plain experiments for an entire project. 
 
 class client:
 	
@@ -42,9 +43,11 @@ class client:
 		if options["start"]:
 			self.start()
 	
+	# API Calls must be made in order, this process the next call in the this 
 	def nxt(self):
 		self.nextMethod.pop(0)()
 	
+	# Fully creates Optly Data Object making all necessary API calls 
 	def start(self):
 		self.setVisitorCount()
 		if self.token_hash == {}:
@@ -58,10 +61,10 @@ class client:
 		if self.account_token == None:
 			raise "ACCOUNT TOKEN ERROR"
 	
-	def setExperimentDescriptions(self, months_ago=2):
+	def setExperimentDescriptions(self, months_ago=1):
 		# Get Experiment ID's and Descriptions: https://www.optimizely.com/api/experiments.json?project_ids=82719230&status=Archived
 		# self.exp_descriptions = {} ## {experiment_id: description, ...}
-		if self.exp_descriptions == {} or months_ago != 2:
+		if self.exp_descriptions == {} or months_ago != 1:
 			for status in ["Paused%2CRunning", "Archived"]:
 			# for status in ["Archived"]:				
 				experiment_ids_request = requests.get("https://www.optimizely.com/api/experiments.json?project_ids=%s&status=%s" % (str(self.project_id), status), cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie } ) 
@@ -79,17 +82,8 @@ class client:
 					del self.exp_descriptions[exp_id]				
 		print "Experiment Descriptions Created"
 	
-	## must be called after set visitor count
-	def removeLowExpVisitors(self, percent): 
-		for exp_id in self.exp_descriptions.keys():
-			total_visitors = self.D.visitor_count[exp_id]["total_visitors"] if self.D != {} else self.visitor_count[exp_id]["total_visitors"]
-			if self.visitor_count[exp_id] < percent * total_visitors: 
-				del self.exp_descriptions[exp_id]
-				del self.visitor_count[exp_id]
-	
 	def setVisitorCount(self):
 		# Visitors per Variation / Experiment {exp_id : { total visitors : x, variation : { v_id : x } } }
-		
 		if self.segment_request != "":
 			self.visitor_count = {}
 			self.makeResultsCall() ## Can only call this after token hash set 
@@ -129,7 +123,7 @@ class client:
 				del self.exp_descriptions[exp_id]
 			except Empty:
 				break
-		print "token hash done"
+		print "token hash done", len(self.token_hash)
 	
 	def setVisitorCountFromResultsApi(self, exp_id, data):
 		if exp_id not in self.visitor_count:
@@ -167,7 +161,8 @@ class client:
 	
 	def add_visitor_call(self, q, output, extra):
 		exp_id = q.get()
-		r = requests.get("https://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()["data"]
+		print "results call, inserting", exp_id, "into queue"
+		r = requests.get("http://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()["data"]
 		if r!= []:
 			for data in r:
 				goal_type = data["type"]
@@ -213,6 +208,7 @@ class client:
 				break
 	
 	def makeResultsCall(self): ## Token hash must be set first
+		print "...... Making Results Call ...... "
 		exp_ids = self.exp_descriptions.keys()
 		(output, extra) = self.batchProcess(exp_ids, self.add_visitor_call)
 		self.processVisitors(output, extra)
@@ -223,7 +219,6 @@ class client:
 		req_goals = requests.get("https://www.optimizely.com/api/experiments/%s.json" % (exp_id), params={"include_results":"false", "token": self.token_hash[exp_id]}, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()
 		for goal in req_goals["goals"]: 
 			output.put((exp_id, str(goal["id"]), goal["name"]))
-			print "experiment added: ", exp_id, str(goal["id"])
 		for variation in req_goals["variations"]:
 			third.put((str(variation["id"]), variation["name"][0]))
 		baseline_index = req_goals["display_baseline_index"]
@@ -231,6 +226,7 @@ class client:
 		q.task_done()
 	
 	def makeExperimentsCall(self):
+		print "......... Making Experiments API Call (e_id, g_id, v_id) ..........."
 		self.variation_names = {}
 		exp_ids = self.exp_descriptions.keys()
 		(output, extra, third) = self.batchProcess(exp_ids, self.add_experiment_call, True)
@@ -261,9 +257,11 @@ class client:
 				d = third.get(block=False)
 				self.variation_names[d[0]] = d[1]
 			except Empty:
-				break	
+				break
+		print "Experiments Call Made", "Length:", len(self.goals)	
 	
 	def addRevenue(self, q, output, extra):
+		"......... Making Revenue API Call (e_id, g_id, v_id) ..........."
 		exp_id = q.get()
 		r = requests.get("https://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "ss": "true", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie})			
 		data_arr = r.json()["data"]
@@ -286,10 +284,13 @@ class client:
 		# Create Goal - Goal Name 
 		# {exp_id: "goals" { goal_id : { "name" : goal_name, var_id : {"conversions" : X , "type" : X, "c-rate" : "X", "CTB": X, "improvement" : X } } } }
 		# self.goals = {}
-		self.makeExperimentsCall() ## sets variation names and original goals		
+		time.sleep(1)
+		self.makeExperimentsCall() ## sets variation names and original goals	
+		time.sleep(2)	
 		## Finish building the hash 
 		# {exp_id: "goals" { goal_id :  { "name" : goal_name , variation_id: {"conversions": value, type: "type", "sum_of_squares" : SS_val_if_rev_goal, "conversion_rate" " X, "improvment" : X,  "CTB" : X }}}} 
 		self.makeResultsCall()	
+		time.sleep(2)
 		self.makeRevenueCall()
 		
 		print "Goals Created"
@@ -379,7 +380,7 @@ class client:
 	
 	def setResultStatistics(self):
 		for exp_id in self.exp_descriptions.keys():
-			print ".....STATS...........", exp_id
+			print "......STATS......", exp_id
 			goal_ids = self.goals[exp_id]["goals"].keys()
 			if exp_id not in self.visitor_count:
 				print ("ERROR:", exp_id)

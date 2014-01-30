@@ -11,17 +11,19 @@ import operator
 from multiprocessing import Process, JoinableQueue
 from Queue import Empty
 
-GAE_Auth_Cookie = "AJKiYcG8vDCiCWOtz2tq1Mx2J1PUFSeVZyJZa6PosmqQFIUcY4CiHgKwWRMyR20xH6FYWetFPRoE8GaxfPsV-EWXX-9Sc4F-TH1D6UV2vDoChgol2oaA9fjz6_owqhfe6dmLURJFvGc11JmLPTgfi3OleQcxJFF88aAPAx_XWF8a6n8eFL_WwBu8W77zK4Lg2Sa_mKyOUW3boFJLWqWdOMEw4YIex_rjEyjVCwotDzrWVyahC32rAj4tawoQPEl7Jw15VSRe9isGPHZuMfoRwHOBgt-PJvlVB-rG2qhBATck9U5MlwgONpH59KujvYR-Xb7AOsK1Zo3kLSHmQPk8UM8sDCrwE0D6sewlmnHjxK2FvyF0zzoFXnzuX1hwLVrGOVO-h67Om4DC5mXe9u7uPE07Rfm_bdgjfMAArM9SMf1baEwlskXBnaI0w9fdExfWHz6qStJODOx-fm34XI0D6QdUx90M9Su1i7V0WU1xI68rWvWOCw1sCgSg1CkcJRc3z1IIy1JWyvYDPOefWKeA7wel6qL9P49Roepz3_OcA7-ODVpbk6nBICOhrI4HF6TOVmz2KnIj5DT3KtqkgX6eyQjjbVYgR0fFnq8uL0cAQyDx8lcT3-YyV1LRd1oS3t0to7GI5RQJPJzsD6CIfA53b6vYlD3V-YeOCg"
+GAE_Auth_Cookie = "AJKiYcEqzYN3lJ5mHNmEyqlFurI_X2mWIK1Lhe3jZjhBbGWnoB-4co4frPY0M6R2fF3V68Z8XlJL9ePCv6zH4dQeKrKk91AkhLrlgiHgpf-eAKOWlji3rQTXsJ9ntMaPp87v-zT0j67QyCVjnNtGpHp27uL4qffgnx7SzsSPiym9jjBOUCXm2SIbuy3W01YSIjMEzj-_cbEJZgVs08VSrwQTCgv3XsJ3d5y_IUm9ekwpL2H-3xTbJ_4bSxFBs59fXtWQEwQhe7mRnyVQS7ONeP4TkIps6W4qYDCHTQtUVSGcTuU5hZMF_-qfIfEtv8x8xzGL9Rwc4Kx1kj6PwOp7e2xZOp68sqgxrhjmGOjNPublGSz4oK5KMddcDRgBvxvFbeIZuxJfeJyTvxqNV_dhEhyxYylKzzqWxfARZLP496nfPvn400OebOS_vxATqqhaDyK8qFXcjKIXnqhFL0-qPGru_vzojNZx_CPsDZahrg5NGhEYIzWziP2aGkgD9vX8WkSPN_aXPBk-RqgXfEKTcUIUYyWX1udLGCIa-v1quZXdHB5CMB04_asG6Xap7XtxCijg0imqF4u81kJg-saDPWTbRP26YAfmzyHu01zMCuGv9G5eWXGTW2n5JT3imP8xSHBH0oxiEhk11-zfHPdPNeRIx6-MrMdImA"
 # optimizely_session = "fc7393a777c80660fb925303329039693509f167"
-email = "cdavin@atgstores.com"
-a_name = "ATG Stores"
+email = "mjolley@fareportal.com"
+a_name = "Fareportal"
 
 # email = "mjolley@fareportal.com"
-project_id = 285656357
-account_id = 285656357
+project_id = 119665466
+account_id = 119665466
 name = a_name+"_%s.xlsx" % str(datetime.date.today())
+conversion_limit = 50 ## Minimum number of conversions needed in variation and original to be considered 
 
-D = OptlyData.client(GAE_Auth_Cookie, project_id, account_id, {"start": True, "email": email})
+print "************************** Running %S **************************"
+D = OptlyData.client(GAE_Auth_Cookie, project_id, account_id, {"start": False, "email": email})
 D.setGoalNames()
 
 num_experiments = len(D.exp_descriptions.keys())
@@ -32,7 +34,7 @@ for segment in requests.get("https://www.optimizely.com/api/projects/%s/segments
 
 segment_value_maps = {} # exp: seg value map
 for exp_id in D.exp_descriptions.keys():
-	print "....segment_value_maps.......", exp_id
+	print "segment_value_maps created: exp_id" , exp_id
 	segment_value_maps[exp_id] = requests.get("https://api.optimizely.com/v1/segment_values/%s?token=%s" % (str(exp_id), D.token_hash[exp_id]), cookies=D.cookies).json()["segment_value_map"]
 
 #SCHEMA ==> { s_id : {s_val : 0, count : 1 } }
@@ -100,7 +102,7 @@ while i < len(common_goals):
 					imp = D.goals[exp_id]['goals'][g_id][var_id]['improvement']	
 					baseline_id = D.exp_descriptions[exp_id]['baseline_id']
 					b_conversions = D.goals[exp_id]['goals'][g_id][baseline_id]['conversions']			
-					if imp == "-" or D.goals[exp_id]['goals'][g_id][var_id]['conversions'] < 250 or b_conversions < 250:
+					if imp == "-" or D.goals[exp_id]['goals'][g_id][var_id]['conversions'] < conversion_limit or b_conversions < conversion_limit:
 						continue
 					elif imp > 0:
 						# print {"goal_id" : g_id,  "exp_id" : exp_id, "var_id": var_id, "improvement" : imp }
@@ -130,7 +132,7 @@ for exp_id in D.exp_descriptions:
 			baseline_id = D.exp_descriptions[exp_id]['baseline_id']
 			b_conversions = D.goals[exp_id]['goals'][goal_id][baseline_id]['conversions']	 
 			# print imp, D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 50, b_conversions < 50
-			if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < 250 or b_conversions < 250:
+			if imp == "-" or D.goals[exp_id]['goals'][goal_id][var_id]['conversions'] < conversion_limit or b_conversions < conversion_limit:
 				continue
 			elif imp > .05 and plus_high:
 				num_high += 1
@@ -247,7 +249,7 @@ min_visits = 1000
 goals_with_min_visits = sum([1 for exp in D.visitor_count if D.visitor_count[exp]['total_visitors'] > 1000])
 avg_goals_exp = float(sum([len(D.goals[exp_id]['goals']) for exp_id in D.exp_descriptions if D.visitor_count[exp_id]['total_visitors'] > 1000])) / goals_with_min_visits
 
-workbook = xlsxwriter.Workbook("/Output/" + name);
+workbook = xlsxwriter.Workbook("output/" + name);
 summary_sheet = workbook.add_worksheet("Summary")
 segment_sheet = workbook.add_worksheet("Segments")
 worksheet = workbook.add_worksheet("Experiments Report - Detailed")
@@ -366,7 +368,7 @@ num = workbook.add_format(combinedFormat(["decimal", "font"]))
 row, col = 2, 1
 writeRange(summary_sheet, row, col, ["Date Run", "", "", str(datetime.date.today())], False, [f,f,f,f])
 row, col = row + 1, 1
-writeRange(summary_sheet, row, col, ["Criteria", "", "", "Modified in Last 90 days"], False, [f,f,f,f])
+writeRange(summary_sheet, row, col, ["Criteria", "", "", "Modified in Last 60 days"], False, [f,f,f,f])
 row, col = row + 2, 1
 f = workbook.add_format(combinedFormat(["font"]))
 num = workbook.add_format(combinedFormat(["decimal", "font"]))
@@ -508,13 +510,14 @@ writeRange(dump, row, col, headers, False, f_mats)
 row += 1
 
 arr = [D] + S
+skipped = [] 
 for results_object in arr:
 	print results_object.segment_id, results_object.segment_value
 	for exp_id in results_object.exp_descriptions.keys():
 		for goal_id in results_object.goals[exp_id]['goals']:
 			for var_id in results_object.visitor_count[exp_id]['variation'].keys():
 				if exp_id not in results_object.goals or var_id not in results_object.variation_names:
-					print "skipping for dump: ", exp_id, g_id, var_id 
+					skipped.append((exp_id, g_id, var_id))
 					continue
 				seg_name = "Original" if results_object.segment_id == "" else segment_names[results_object.segment_id]
 				r = [exp_id,
@@ -545,11 +548,11 @@ for results_object in arr:
 				writeRange(dump, row, col, r, False, f_mats)
 				row+=1
 
+print "Skipped Experiment IDs for Dump ( e_id, g_id, v_id) ", skipped
+
 dump.hide_gridlines(2)
 dump.set_column(0, len(f_mats)-1, 14)
 dump.autofilter(0, 1 , row, len(f_mats)-1)
 workbook.close()
 
-workbook = xlsxwriter.Workbook("/Output/test")
-workbook.close()
 
