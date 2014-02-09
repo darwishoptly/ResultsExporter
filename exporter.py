@@ -11,19 +11,21 @@ import operator
 from multiprocessing import Process, JoinableQueue
 from Queue import Empty
 
-GAE_Auth_Cookie = "AJKiYcEqzYN3lJ5mHNmEyqlFurI_X2mWIK1Lhe3jZjhBbGWnoB-4co4frPY0M6R2fF3V68Z8XlJL9ePCv6zH4dQeKrKk91AkhLrlgiHgpf-eAKOWlji3rQTXsJ9ntMaPp87v-zT0j67QyCVjnNtGpHp27uL4qffgnx7SzsSPiym9jjBOUCXm2SIbuy3W01YSIjMEzj-_cbEJZgVs08VSrwQTCgv3XsJ3d5y_IUm9ekwpL2H-3xTbJ_4bSxFBs59fXtWQEwQhe7mRnyVQS7ONeP4TkIps6W4qYDCHTQtUVSGcTuU5hZMF_-qfIfEtv8x8xzGL9Rwc4Kx1kj6PwOp7e2xZOp68sqgxrhjmGOjNPublGSz4oK5KMddcDRgBvxvFbeIZuxJfeJyTvxqNV_dhEhyxYylKzzqWxfARZLP496nfPvn400OebOS_vxATqqhaDyK8qFXcjKIXnqhFL0-qPGru_vzojNZx_CPsDZahrg5NGhEYIzWziP2aGkgD9vX8WkSPN_aXPBk-RqgXfEKTcUIUYyWX1udLGCIa-v1quZXdHB5CMB04_asG6Xap7XtxCijg0imqF4u81kJg-saDPWTbRP26YAfmzyHu01zMCuGv9G5eWXGTW2n5JT3imP8xSHBH0oxiEhk11-zfHPdPNeRIx6-MrMdImA"
+GAE_Auth_Cookie = "AJKiYcEX-gGVSLIcLqvAn4FjylevJRobhfBQCkpbHEScs8Pm25xlu3m80OestPwrfmlsv2z6etBrpOZmvVQXdfXU-qEnrOcz6ykIJ7QukGxXR4ThsRDoyeIXlVqnGBTQzInPh_ufkwKa5GWmPH3H2Wfq5GuIWvW9w_B5V32uDctpODi-RnFvcNBWTz72xIXG0RnPZEn-MMTgV3XOE6XBz1odkZ-CM2jTlh98NVRHvEnhG856SeeS-97lrtbvmmQngUDi79Twn8PtxJDmg2I7BRon7w29FonEeSGCQL3-pBIDxh-WTjrNdH37nzupNFtOSplQFQPlLKvRZ55sGprZ31GqfIGynUYgUMMeseDp-1o2nzEAh5Khy640YIpP1NfM6en2hPdNZNKSMkTWmzzw_kwV4v3ZEWgbpiTyrGONGyx3UQFA6hQf6kf0kEuD4sUjWnL_4eHpAgAy44Fa1uXqYwQkiJBR-DEAyhWSpUn6Pb_8B9ETeCL3cnYeFDN13Vv_KYofb_iKzyXm_QWvCbPngnalBoyH2vbcB4gADLav4_ptrRLofeZIObHPgEH_AFf-qXdx1gX3IFJSjXlbDEmEaRHALFu8OJoxBZD55HX85OCOb2oyJf-0e2cxuUILwalrjfPvlehl7KJUygiW0EV_XvZirG_olYVl5w"
 # optimizely_session = "fc7393a777c80660fb925303329039693509f167"
-email = "mjolley@fareportal.com"
-a_name = "Fareportal"
+email = "alan@electricitywizard.com.au"
+a_name = "Electricity Wizard"
 
 # email = "mjolley@fareportal.com"
-project_id = 119665466
-account_id = 119665466
+project_id = 20358592
+account_id = 7489188
 name = a_name+"_%s.xlsx" % str(datetime.date.today())
 conversion_limit = 50 ## Minimum number of conversions needed in variation and original to be considered 
 
-print "************************** Running %S **************************"
+print "************************** Running %s Dashboard **************************" % a_name 
 D = OptlyData.client(GAE_Auth_Cookie, project_id, account_id, {"start": False, "email": email})
+projects = requests.get("https://www.optimizely.com/api/projects.json", cookies=D.cookies).json()['projects']
+
 D.setGoalNames()
 
 num_experiments = len(D.exp_descriptions.keys())
@@ -519,7 +521,12 @@ for results_object in arr:
 				if exp_id not in results_object.goals or var_id not in results_object.variation_names:
 					skipped.append((exp_id, g_id, var_id))
 					continue
-				seg_name = "Original" if results_object.segment_id == "" else segment_names[results_object.segment_id]
+				if results_object.segment_id: 
+					seg_name = "Original"
+				elif results_object.segment_id not in segment_names:
+					seg_name = "Deleted"
+				else:
+					seg_name = segment_names[results_object.segment_id]
 				r = [exp_id,
 					var_id,
 					results_object.exp_descriptions[exp_id]["description"],

@@ -1,4 +1,6 @@
 -- TO DO --
+find where for a segment variation winner winner different from overall. math is significantly different. 
+
 
 backend:
 what are the specific calls that I make for one instance. 

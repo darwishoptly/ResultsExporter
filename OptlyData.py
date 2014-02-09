@@ -6,21 +6,21 @@ from pprint import pprint
 import NormDist
 import ExpDist
 import datetime
-from multiprocessing import Process, JoinableQueue
+from multiprocessing import Process, JoinableQueue, Queue, Manager
 from Queue import Empty
+import myAdapter
 
 
 # One instance of the OptlyData class holds all experiment information for a single segment id, value pair, for a given project. If no segment ID,Value pair is defined, then its just for the plain experiments for an entire project. 
 
 class client:
-	
 	def __init__(self, GAEAuthCookie, project_id, account_id, options={}): # options - email, optimizely_session, segment_id, segment_value 
+		# requests = myAdapter.s
 		self.GAE_Auth_Cookie, self.project_id, self.account_id = GAEAuthCookie, project_id, account_id
 		if "optimizely_session" in options: 
 			self.optimizely_session = options["optimizely_session"]
 		else:
-			print "HERE"
-			r = requests.get("https://www.optimizely.com/admin/impersonate?email=%s" % options["email"], cookies={"SACSID" : self.GAE_Auth_Cookie}) 
+			r = requests.get("HTTPS://www.optimizely.com/admin/impersonate?email=%s" % options["email"], cookies={"SACSID" : self.GAE_Auth_Cookie}) 
 			self.optimizely_session = r.cookies['optimizely_session']
 		self.segment_id = options["segment_id"] if "segment_id" in options else ""
 		self.segment_value = options["segment_value"] if "segment_id" in options else ""
@@ -30,13 +30,13 @@ class client:
 		self.D = options["D"] if "D" in options else {}
 		self.cookies = {"optimizely_session": self.optimizely_session,
 			 			"SACSID" : self.GAE_Auth_Cookie}
+		
 		self.goals = {}
 		if "account_token" in options:
 			self.account_token = options["account_token"]
 		else:
 			self.setAccountToken()
 		self.exp_descriptions = options["exp_descriptions"] if "exp_descriptions" in options else {} 
-		self.setExperimentDescriptions()
 		
 		self.nextMethod = [self.setVisitorCount, self.createTokenHash, self.setGoals, self.setResultStatistics]
 		
@@ -49,6 +49,7 @@ class client:
 	
 	# Fully creates Optly Data Object making all necessary API calls 
 	def start(self):
+		self.setExperimentDescriptions()
 		self.setVisitorCount()
 		if self.token_hash == {}:
 			self.createTokenHash()
@@ -56,31 +57,33 @@ class client:
 		self.setResultStatistics()
 	
 	def setAccountToken(self):
-		account_token_request = requests.get("https://www.optimizely.com/admin/account_token?account_id=%s" % str(self.account_id), cookies=self.cookies) 
+		account_token_request = requests.get("HTTPS://www.optimizely.com/admin/account_token?account_id=%s" % str(self.account_id), cookies=self.cookies) 
 		self.account_token = account_token_request.json()["token"]
 		if self.account_token == None:
 			raise "ACCOUNT TOKEN ERROR"
 	
-	def setExperimentDescriptions(self, months_ago=1):
-		# Get Experiment ID's and Descriptions: https://www.optimizely.com/api/experiments.json?project_ids=82719230&status=Archived
+	def setExperimentDescriptions(self, months_ago=3):
+		# Get Experiment ID's and Descriptions: HTTPSs://www.optimizely.com/api/experiments.json?project_ids=82719230&status=Archived
 		# self.exp_descriptions = {} ## {experiment_id: description, ...}
-		if self.exp_descriptions == {} or months_ago != 1:
+		if self.exp_descriptions == {} or months_ago != 3:
 			for status in ["Paused%2CRunning", "Archived"]:
 			# for status in ["Archived"]:				
-				experiment_ids_request = requests.get("https://www.optimizely.com/api/experiments.json?project_ids=%s&status=%s" % (str(self.project_id), status), cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie } ) 
+				experiment_ids_request = requests.get("HTTPS://www.optimizely.com/api/experiments.json?project_ids=%s&status=%s" % (str(self.project_id), status), cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie } ) 
 				self.exp_descriptions = dict(self.exp_descriptions.items() + {str(exp_data["id"]) : {"description" : exp_data["description"],  "status" : exp_data["status"] , "last_modified" : exp_data["last_modified"] } for exp_data in experiment_ids_request.json()["experiments"]}.items())
 		for exp_id in self.exp_descriptions.keys():
 			if (self.segment_request != "") and (self.segment_id in self.segment_value_maps[exp_id]) and (self.segment_value not in self.segment_value_maps[exp_id][self.segment_id]):
 				print "deleting", exp_id
 				del self.exp_descriptions[exp_id]
-			else:
-			## remove experiments > x months old. 
-				t = self.exp_descriptions[exp_id]['last_modified']
-				exp_date = datetime.datetime.strptime(t[0:-1], "%Y-%m-%dT%H:%M:%S")
-				ago = datetime.datetime.today() - datetime.timedelta(months_ago*365/12)	
-				if (exp_date - ago).days < 0:
-					del self.exp_descriptions[exp_id]				
-		print "Experiment Descriptions Created"
+		self.removeOldExperiments(months_ago)
+		print "Experiment Descriptions Created: length, ", len(self.exp_descriptions)
+	
+	def removeOldExperiments(self, months_ago):
+		for exp_id in self.exp_descriptions.keys():
+			t = self.exp_descriptions[exp_id]['last_modified']
+			exp_date = datetime.datetime.strptime(t[0:-1], "%Y-%m-%dT%H:%M:%S")
+			ago = datetime.datetime.today() - datetime.timedelta(months_ago*365/12)	
+			if (exp_date - ago).days < 0:
+				del self.exp_descriptions[exp_id]
 	
 	def setVisitorCount(self):
 		# Visitors per Variation / Experiment {exp_id : { total visitors : x, variation : { v_id : x } } }
@@ -90,14 +93,14 @@ class client:
 			print "length exp descriptions", len(self.exp_descriptions.keys())
 			self.sumVisitorCount()
 		else:
-			count_visitors_request = requests.get("https://api.optimizely.com/v1/visitors/%s?experiment_ids=%s&token=%s" % (str(self.account_id) ,",".join(self.exp_descriptions.keys()), self.account_token), cookies= self.cookies).json()
+			count_visitors_request = requests.get("HTTPS://api.optimizely.com/v1/visitors/%s?experiment_ids=%s&token=%s" % (str(self.account_id) ,",".join(self.exp_descriptions.keys()), self.account_token), cookies= self.cookies).json()
 			self.visitor_count = {str(exp_data["id"]) : {"variation" : exp_data["by_variation"], "total_visitors": exp_data["visitor_count"]} for exp_data in count_visitors_request["experiments"]}
-		print "Visitor Count Created"
+		print "Visitor Count Created", len(self.visitor_count)
 	
 	def add_experiment_token(self, q, output, extra):
 		exp_id = q.get()
 		# print "....TOKEN....", exp_id
-		r = requests.get("https://www.optimizely.com/results", params={"experiment_id":str(exp_id)}, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie})
+		r = requests.get("HTTPS://www.optimizely.com/results", params={"experiment_id":str(exp_id)}, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie})
 		soup = BeautifulSoup(r.text)
 		try:
 			link = soup.find("a", {"class":"admin"})['href']
@@ -161,8 +164,8 @@ class client:
 	
 	def add_visitor_call(self, q, output, extra):
 		exp_id = q.get()
-		print "results call, inserting", exp_id, "into queue"
-		r = requests.get("http://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()["data"]
+		print "results call, recieved", exp_id, "into queue"
+		r = requests.get("HTTPS://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()["data"]
 		if r!= []:
 			for data in r:
 				goal_type = data["type"]
@@ -171,17 +174,19 @@ class client:
 				else:
 					goal_id = str(data["goal_ids"][0])
 				var_id, conversions = data["variation_id"], data["values"][0]
+				print "results call, putting", exp_id, "into queue"
 				output.put((exp_id, goal_id, var_id, conversions, goal_type))
 		else:
 			print "failure", exp_id
 			extra.put(exp_id)
 		q.task_done()
-
+	
 	def processVisitors(self, output, extra):
 		print "processing visitors"
 		while True:
 			try:
-				(exp_id, goal_id, var_id, conversions, goal_type) = output.get(block=False)	
+				(exp_id, goal_id, var_id, conversions, goal_type) = output.get_nowait()	
+				print "result calls, successfully inserting into goals (exp_id, goal_id, var_id, conversions, goal_type):", exp_id, goal_id, var_id, conversions, goal_type
 				if self.segment_request != "":
 					if exp_id not in self.visitor_count:
 						self.visitor_count[exp_id] = {"variation": {}}
@@ -200,23 +205,74 @@ class client:
 				break
 		while True:
 			try:
-				exp_id = extra.get(block=False)	
+				exp_id = extra.get_nowait()	
 				print "no results existed for exp2:", exp_id
 				del self.exp_descriptions[exp_id]
 				extra.task_done()
 			except Empty:
 				break
 	
+	def processVisitorsSafe(self, output, extra):
+		print "processing visitors"
+		while True:
+			try:
+				(exp_id, goal_id, var_id, conversions, goal_type) = output.get(block=True)	
+				if self.segment_request != "":
+					if exp_id not in self.visitor_count:
+						self.visitor_count[exp_id] = {"variation": {}}
+					if goal_type != "event_goal" and goal_type != "revenue_goal":
+						self.visitor_count[exp_id]["variation"][var_id] = conversions
+				if goal_type != "visitor":
+					print "result calls, successfully inserting into goals (exp_id, goal_id, var_id, conversions, goal_type):", exp_id, goal_id, var_id, conversions, goal_type
+					if exp_id not in self.goals:
+						print "inside1"
+						self.goals[exp_id] = {"goals": {goal_id : {}}}
+						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
+					elif goal_id not in self.goals[exp_id]["goals"]:
+						print "inside2"
+						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
+					else:
+						print "inside3: ", conversions, goal_type 						
+						self.goals[exp_id]["goals"][goal_id].update({var_id : { "conversions" : conversions, "type": goal_type }})
+					output.task_done()
+			except Empty:
+				print "Empty"
+		# while True:
+		# 	try:
+		# 		exp_id = extra.get_nowait()	
+		# 		print "no results existed for exp2:", exp_id
+		# 		del self.exp_descriptions[exp_id]
+		# 		extra.task_done()
+		# 	except Empty:
+		# 		break
+		
 	def makeResultsCall(self): ## Token hash must be set first
 		print "...... Making Results Call ...... "
 		exp_ids = self.exp_descriptions.keys()
 		(output, extra) = self.batchProcess(exp_ids, self.add_visitor_call)
 		self.processVisitors(output, extra)
 		print "Results Call made."
-	
+		
+	def makeResultsCallSafe(self):
+		# Had Trouble Getting this to work. Hash
+		print "...... Making SAFE Results Call ...... "
+		exp_producer = JoinableQueue()
+		self.output = JoinableQueue()
+		errors = JoinableQueue()
+		c_process = Process(target=self.processVisitorsSafe, args=(self.output, errors))
+		processes = [Process(target=self.add_visitor_call, args=(exp_producer, self.output, errors)) for exp_id in self.exp_descriptions.keys()]
+		for p in processes:
+			p.start()
+		c_process.start()
+		for exp_id in self.exp_descriptions.keys():
+			exp_producer.put(exp_id)
+		for p in processes: 
+			p.join()
+		c_process.terminate() 
+		
 	def add_experiment_call(self, q, output, extra, third):
 		exp_id = q.get()
-		req_goals = requests.get("https://www.optimizely.com/api/experiments/%s.json" % (exp_id), params={"include_results":"false", "token": self.token_hash[exp_id]}, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()
+		req_goals = requests.get("HTTPS://www.optimizely.com/api/experiments/%s.json" % (exp_id), params={"include_results":"false", "token": self.token_hash[exp_id]}, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()
 		for goal in req_goals["goals"]: 
 			output.put((exp_id, str(goal["id"]), goal["name"]))
 		for variation in req_goals["variations"]:
@@ -247,7 +303,7 @@ class client:
 		while True:
 			try:
 				d = extra.get(block=False)
-				self.exp_descriptions[d[0]]["start"] = d[1]
+				self.exp_descriptions[d[0]]["earliest"] = d[1]
 				self.exp_descriptions[d[0]]["latest"] = d[2]
 				self.exp_descriptions[d[0]]["baseline_id"] = d[3]
 			except Empty:
@@ -263,7 +319,7 @@ class client:
 	def addRevenue(self, q, output, extra):
 		"......... Making Revenue API Call (e_id, g_id, v_id) ..........."
 		exp_id = q.get()
-		r = requests.get("https://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "ss": "true", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie})			
+		r = requests.get("HTTPS://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "ss": "true", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie})			
 		data_arr = r.json()["data"]
 		for data in data_arr:
 			if data["type"] == "revenue_goal":
@@ -375,16 +431,16 @@ class client:
 	        conversions, conversion_rate = self.getGoalConversions(exp_id, var_id, goal_id)
 	        b_conversions, b_conversion_rate = self.getGoalConversions(exp_id, baseline_variation_id, goal_id)
 	        improvement = "-" if (b_conversion_rate == 0 or conversion_rate == "-" or b_conversion_rate == "-") else (float(conversion_rate) / float(b_conversion_rate)) - 1
-	        CTB = self.CTBNormal(exp_id, var_id, goal_id)
+	        CTB = self.CTBNormal(exp_id, var_id, goal_id) if (conversions > 25 and b_conversions) > 25 else "-"
 	        return (conversions, conversion_rate, improvement, CTB)
 	
 	def setResultStatistics(self):
 		for exp_id in self.exp_descriptions.keys():
 			print "......STATS......", exp_id
-			goal_ids = self.goals[exp_id]["goals"].keys()
-			if exp_id not in self.visitor_count:
+			if exp_id not in self.visitor_count or exp_id not in self.goals:
 				print ("ERROR:", exp_id)
 				continue
+			goal_ids = self.goals[exp_id]["goals"].keys()
 			var_ids = self.visitor_count[exp_id]['variation'].keys()
 			baseline_variation_id = filter(lambda var_id: var_id == self.exp_descriptions[exp_id]["baseline_id"] , var_ids)
 			baseline_variation_id = baseline_variation_id[0] if len(baseline_variation_id) > 0 else var_ids[0]
