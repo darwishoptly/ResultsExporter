@@ -30,8 +30,9 @@ class client:
 		self.D = options["D"] if "D" in options else {}
 		self.cookies = {"optimizely_session": self.optimizely_session,
 			 			"SACSID" : self.GAE_Auth_Cookie}
-		
+		self.errors = []
 		self.goals = {}
+		self.inResultsCall = set()
 		if "account_token" in options:
 			self.account_token = options["account_token"]
 		else:
@@ -151,11 +152,15 @@ class client:
 			args=(q, output, extra)
 		for obj in arr_to_enque:
 			q.put(obj)
-		processes = [Process(target=work_method, args=args) for obj in arr_to_enque]
+		processes = [Process(target=work_method, args=args, name=str(obj)) for obj in arr_to_enque]
 		for p in processes:
 			p.start()
 		for p in processes: 
-			p.join()
+			p.join(30)
+			if p.is_alive():
+				print "ERROR JOINING PROCESS FOR: ", p.name
+				p.terminate()
+				raise Exception("Goal Conversion Error:", (self.account_id, self.project_id, exp_id, var_ids))
 		print "end batch process"
 		if t:
 			return (output, extra, third)
@@ -164,18 +169,28 @@ class client:
 	
 	def add_visitor_call(self, q, output, extra):
 		exp_id = q.get()
-		print "results call, recieved", exp_id, "into queue"
+		# print "results call, recieved", exp_id, "into queue"
 		r = requests.get("HTTPS://api.optimizely.com/v1/results/%s" % (exp_id), params={"debug":"false", "bucket_count" : "1", "token": self.token_hash[exp_id], "segment_id" : self.segment_id, "segment_value" : self.segment_value }, cookies={"optimizely_session": self.optimizely_session, "SACSID" : self.GAE_Auth_Cookie}).json()["data"]
 		if r!= []:
+			# for data in r:
+			# 	goal_type = data["type"]
+			# 	if goal_type != "event_goal" and goal_type != "revenue_goal":
+			# 		goal_id = "" 
+			# 	else:
+			# 		goal_id = str(data["goal_ids"][0])
+			# 	var_id, conversions = data["variation_id"], data["values"][0]
+			# 	# print (exp_id, goal_id, var_id, conversions, goal_type)
+			# 	# print "results call, putting", exp_id, "into queue"
+			# 	output.put((exp_id, goal_id, var_id, conversions, goal_type))
 			for data in r:
 				goal_type = data["type"]
+				var_id, conversions = data["variation_id"], data["values"][0]
 				if goal_type != "event_goal" and goal_type != "revenue_goal":
 					goal_id = "" 
+					output.put((exp_id, goal_id, var_id, conversions, goal_type))
 				else:
-					goal_id = str(data["goal_ids"][0])
-				var_id, conversions = data["variation_id"], data["values"][0]
-				print "results call, putting", exp_id, "into queue"
-				output.put((exp_id, goal_id, var_id, conversions, goal_type))
+					for goal_id in data["goal_ids"]:
+						output.put((exp_id, str(goal_id), var_id, conversions, goal_type))
 		else:
 			print "failure", exp_id
 			extra.put(exp_id)
@@ -187,6 +202,7 @@ class client:
 			try:
 				(exp_id, goal_id, var_id, conversions, goal_type) = output.get_nowait()	
 				print "result calls, successfully inserting into goals (exp_id, goal_id, var_id, conversions, goal_type):", exp_id, goal_id, var_id, conversions, goal_type
+				self.inResultsCall.add((exp_id, goal_id, var_id, goal_type))
 				if self.segment_request != "":
 					if exp_id not in self.visitor_count:
 						self.visitor_count[exp_id] = {"variation": {}}
@@ -212,63 +228,27 @@ class client:
 			except Empty:
 				break
 	
-	def processVisitorsSafe(self, output, extra):
-		print "processing visitors"
-		while True:
-			try:
-				(exp_id, goal_id, var_id, conversions, goal_type) = output.get(block=True)	
-				if self.segment_request != "":
-					if exp_id not in self.visitor_count:
-						self.visitor_count[exp_id] = {"variation": {}}
-					if goal_type != "event_goal" and goal_type != "revenue_goal":
-						self.visitor_count[exp_id]["variation"][var_id] = conversions
-				if goal_type != "visitor":
-					print "result calls, successfully inserting into goals (exp_id, goal_id, var_id, conversions, goal_type):", exp_id, goal_id, var_id, conversions, goal_type
-					if exp_id not in self.goals:
-						print "inside1"
-						self.goals[exp_id] = {"goals": {goal_id : {}}}
-						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
-					elif goal_id not in self.goals[exp_id]["goals"]:
-						print "inside2"
-						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
-					else:
-						print "inside3: ", conversions, goal_type 						
-						self.goals[exp_id]["goals"][goal_id].update({var_id : { "conversions" : conversions, "type": goal_type }})
-					output.task_done()
-			except Empty:
-				print "Empty"
-		# while True:
-		# 	try:
-		# 		exp_id = extra.get_nowait()	
-		# 		print "no results existed for exp2:", exp_id
-		# 		del self.exp_descriptions[exp_id]
-		# 		extra.task_done()
-		# 	except Empty:
-		# 		break
-		
-	def makeResultsCall(self): ## Token hash must be set first
-		print "...... Making Results Call ...... "
+	def makeResultsCallSlow(self, step=20):
 		exp_ids = self.exp_descriptions.keys()
+		print "LENGTH USED: ", len(exp_ids), exp_ids
+		i = 0
+		while True:
+			if i + step > len(exp_ids):
+				first, last = i, len(exp_ids)
+				self.makeResultsCall(exp_ids[first:last])
+				break
+			else: 
+				first, last = i, i+step
+			print exp_ids[i:i+step], len(exp_ids[i:i+step]), i
+			self.makeResultsCall(exp_ids[first:last])
+			i = i + step		
+		
+	def makeResultsCall(self, exp_ids=None): ## Token hash must be set first
+		print "...... Making Results Call ...... "
+		exp_ids = exp_ids or self.exp_descriptions.keys()
 		(output, extra) = self.batchProcess(exp_ids, self.add_visitor_call)
 		self.processVisitors(output, extra)
 		print "Results Call made."
-		
-	def makeResultsCallSafe(self):
-		# Had Trouble Getting this to work. Hash
-		print "...... Making SAFE Results Call ...... "
-		exp_producer = JoinableQueue()
-		self.output = JoinableQueue()
-		errors = JoinableQueue()
-		c_process = Process(target=self.processVisitorsSafe, args=(self.output, errors))
-		processes = [Process(target=self.add_visitor_call, args=(exp_producer, self.output, errors)) for exp_id in self.exp_descriptions.keys()]
-		for p in processes:
-			p.start()
-		c_process.start()
-		for exp_id in self.exp_descriptions.keys():
-			exp_producer.put(exp_id)
-		for p in processes: 
-			p.join()
-		c_process.terminate() 
 		
 	def add_experiment_call(self, q, output, extra, third):
 		exp_id = q.get()
@@ -416,11 +396,16 @@ class client:
 	def getGoalConversions(self, exp_id, var_id, goal_id):
 		visitors = self.visitor_count[exp_id]['variation'][var_id]
 		print exp_id, goal_id, var_id
-		conversions = self.goals[exp_id]["goals"][goal_id][var_id]["conversions"]
-		if visitors > 100:
-			conversion_rate = float(conversions) / float(visitors)
+		if var_id not in self.goals[exp_id]["goals"][goal_id]:
+			self.errors.append(("STATS", self.account_id, self.project_id, exp_id, var_id))
+			print ("ERROR STATS", self.account_id, self.project_id, exp_id, var_id)
+			conversions, conversion_rate = "-", "-"
 		else:
-			conversion_rate = "-"
+			conversions = self.goals[exp_id]["goals"][goal_id][var_id]["conversions"]
+			if visitors > 100:
+				conversion_rate = float(conversions) / float(visitors)
+			else:
+				conversion_rate = "-"
 		return (conversions, conversion_rate)
 	
 	def getGoalValues(self, exp_id, var_id, goal_id, baseline_variation_id):
@@ -431,7 +416,7 @@ class client:
 	        conversions, conversion_rate = self.getGoalConversions(exp_id, var_id, goal_id)
 	        b_conversions, b_conversion_rate = self.getGoalConversions(exp_id, baseline_variation_id, goal_id)
 	        improvement = "-" if (b_conversion_rate == 0 or conversion_rate == "-" or b_conversion_rate == "-") else (float(conversion_rate) / float(b_conversion_rate)) - 1
-	        CTB = self.CTBNormal(exp_id, var_id, goal_id) if (conversions > 25 and b_conversions) > 25 else "-"
+	        CTB = self.CTBNormal(exp_id, var_id, goal_id) if (conversions > 25 and b_conversions > 25) else "-"
 	        return (conversions, conversion_rate, improvement, CTB)
 	
 	def setResultStatistics(self):
@@ -461,3 +446,56 @@ class client:
 					self.goals[exp_id]["goals"][goal_id][var_id]["CTB"] = CTB
 					if var_id == baseline_variation_id: 
 						self.goals[exp_id]["goals"][goal_id][var_id]["baseline"] = True
+	
+	# COULD NOT GET THIS TO WORK	
+	def makeResultsCallSafe(self):
+		# Had Trouble Getting this to work. Hash
+		print "...... Making SAFE Results Call ...... "
+		exp_producer = JoinableQueue()
+		self.output = JoinableQueue()
+		errors = JoinableQueue()
+		c_process = Process(target=self.processVisitorsSafe, args=(self.output, errors))
+		processes = [Process(target=self.add_visitor_call, args=(exp_producer, self.output, errors)) for exp_id in self.exp_descriptions.keys()]
+		for p in processes:
+			p.start()
+		c_process.start()
+		for exp_id in self.exp_descriptions.keys():
+			exp_producer.put(exp_id)
+		for p in processes: 
+			p.join()
+		c_process.terminate()
+		
+	# COULD NOT GET THIS TO WORK
+	def processVisitorsSafe(self, output, extra):
+		print "processing visitors"
+		while True:
+			try:
+				(exp_id, goal_id, var_id, conversions, goal_type) = output.get(block=True)	
+				if self.segment_request != "":
+					if exp_id not in self.visitor_count:
+						self.visitor_count[exp_id] = {"variation": {}}
+					if goal_type != "event_goal" and goal_type != "revenue_goal":
+						self.visitor_count[exp_id]["variation"][var_id] = conversions
+				if goal_type != "visitor":
+					print "result calls, successfully inserting into goals (exp_id, goal_id, var_id, conversions, goal_type):", exp_id, goal_id, var_id, conversions, goal_type
+					if exp_id not in self.goals:
+						print "inside1"
+						self.goals[exp_id] = {"goals": {goal_id : {}}}
+						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
+					elif goal_id not in self.goals[exp_id]["goals"]:
+						print "inside2"
+						self.goals[exp_id]["goals"][goal_id] = {var_id : { "conversions" : conversions, "type": goal_type }}
+					else:
+						print "inside3: ", conversions, goal_type 						
+						self.goals[exp_id]["goals"][goal_id].update({var_id : { "conversions" : conversions, "type": goal_type }})
+					output.task_done()
+			except Empty:
+				print "Empty"
+		# while True:
+		# 	try:
+		# 		exp_id = extra.get_nowait()	
+		# 		print "no results existed for exp2:", exp_id
+		# 		del self.exp_descriptions[exp_id]
+		# 		extra.task_done()
+		# 	except Empty:
+		# 		break
